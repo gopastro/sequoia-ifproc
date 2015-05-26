@@ -6,19 +6,21 @@ import datetime
 from hp83711b import HP83711B
 import numpy
 import time
+import pandas as pd
 
 #corba class
 from ifproc_corba import IFProc
 
 def gpib_init():
-    syn = HP83711B()
+    syn = HP83711B('synth')
     if syn:
         print "Frequency: %.4f GHz; Power level: %.1f dBm; Multiplier: %d" % (syn.get_freq()/1e9, syn.get_power_level(), syn.get_mult())
         return syn
 
 #class for multifrequency measurements 
 class Sequoia(object):
-    def __init__(self, frequencies, chans, syn):
+    def __init__(self, frequencies, chans, syn,
+                 init_atten=10):
         """
         frequencies is a list of frequencies
         chans is an integer array of IF channels to keep track of
@@ -27,8 +29,16 @@ class Sequoia(object):
         self.frequencies = frequencies
         self.syn = syn
         self.chans = chans
+        self.init_atten = init_atten
         self.ifproc = IFProc()
-        
+        self._init_attenuations()
+
+    def _init_attenuations(self):
+        print "Setting all attenuators to %d" % self.init_atten
+        for chan in self.chans:
+            self.ifproc.set_atten(self.init_atten, chan)
+            time.sleep(0.1)
+
     def get_zero_offset(self):
         print "Obtaining zero offsets"
         self.zero_offsets = numpy.zeros((len(self.frequencies), 32), 
@@ -40,6 +50,15 @@ class Sequoia(object):
             time.sleep(0.1)
             self.zero_offsets[i] = self.ifproc.get_all_voltages()
 
+    def get_zero_offset_freq_independent(self):
+        print "Obtaining freq independent zero offsets"
+        self.freq_indep_zero_offsets = numpy.zeros(32, dtype=float)
+        raw_input("Hit Enter after turning off second IF chain > ")
+        for chan in self.chans:
+            self.ifproc.set_atten(31, chan)
+            time.sleep(0.1)
+        self.freq_indep_zero_offsets = self.ifproc.get_all_voltages()
+        
     def _set_optimal_attenuator(self, voltage, delta=3.0, chans=None, 
                                 num_iterations=10):
         """
@@ -78,22 +97,24 @@ class Sequoia(object):
                             #raise Exception("ATT", "atten needs to be greater than 31 dB for chan: %d" % chan)
                             print "\n\nAttenuator needs to be greater than 31 dB for chan %d\n\n" % chan
                             self.ifproc.set_atten(31, chan)
-                            time.sleep(0.1)
+                            time.sleep(0.5)
                             opt_atten[chan] = self.ifproc.get_atten(chan)
                             iterate = False
                         else:
                             self.ifproc.set_atten(new_att, chan)
+			    time.sleep(0.5)
                     elif v < -9.8:
                         new_att = att - 1
                         if new_att < 0:
                             #raise Exception("ATT", "atten needs to be lesser than 0 dB for chan: %d" % chan)
                             print "\n\nAttenuator needs to be less than 0 dB for chan %d\n\n" % chan
                             self.ifproc.set_atten(0, chan)
-                            time.sleep(0.1)
+                            time.sleep(0.5)
                             opt_atten[chan] = self.ifproc.get_atten(chan)
                             iterate = False
                         else:
                             self.ifproc.set_atten(new_att, chan)
+			    time.sleep(0.5)
                             
                     elif v > voltage:
                         # too high, let's bring it down 
@@ -102,11 +123,12 @@ class Sequoia(object):
                             #raise Exception("ATT", "atten needs to be greater than 31 dB for chan: %d" % chan)                            
                             print "\n\nAttenuator needs to be greater than 31 dB for chan %d\n\n" % chan
                             self.ifproc.set_atten(31, chan)
-                            time.sleep(0.1)
+                            time.sleep(0.5)
                             opt_atten[chan] = self.ifproc.get_atten(chan)
                             iterate = False
                         else:
                             self.ifproc.set_atten(new_att, chan)
+			    time.sleep(0.5)
                     else:
                         # too little, bring it up
                         new_att = att - 1
@@ -114,11 +136,12 @@ class Sequoia(object):
                             #raise Exception("ATT", "atten needs to be lower than 0 dB for chan: %d" % chan)
                             print "\n\nAttenuator needs to be less than 0 dB for chan %d\n\n" % chan
                             self.ifproc.set_atten(0, chan)
-                            time.sleep(0.1)
+                            time.sleep(0.5)
                             opt_atten[chan] = self.ifproc.get_atten(chan)
                             iterate = False
                         else:
                             self.ifproc.set_atten(new_att, chan)
+			    time.sleep(0.5)
         return opt_atten
 
     def set_opt_atten(self, voltage, delta=3.0, chans=None, 
@@ -147,6 +170,20 @@ class Sequoia(object):
             self.optimal_attenuation[i] = [opt_att[c] for c in chans]
             print
             print
+
+    def get_opt_atten_from_file(self, attenfile):
+        df = pd.read_table(attenfile, sep=',', header=1)
+        frequencies = self.frequencies
+        chans = self.chans
+        self.optimal_attenuation = numpy.zeros((len(frequencies),
+                                                len(chans)),
+                                               dtype='int')
+        dg  = df.groupby('IFFreq')
+        for i, freq in enumerate(frequencies):
+            frequency = float("%.3f" % freq)
+            opt_att = dg.get_group(frequency)['Atten'].tolist()
+            self.optimal_attenuation[i] = opt_att
+        print "Read optimal attenuation from file %s" % attenfile
 
     def _get_voltages(self, frequencies=None, chans=None,
                      label='Offset'):
@@ -206,11 +243,11 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage)
     parser.add_option("-s", "--startfreq", dest="startfreq",
                       action="store", type="float",
-                      default=5.0,
+                      default=4.6,
                       help="start frequency of sweep in GHz")
     parser.add_option("-e", "--endfreq", dest="endfreq",
                       action="store", type="float",
-                      default=20.0,
+                      default=19.6,
                       help="end frequency of sweep in GHz")
     parser.add_option("-S", "--stepfreq", dest="stepfreq",
                       action="store", type="float",
@@ -222,11 +259,11 @@ if __name__ == '__main__':
                       help="Ascii Filename to store data into")
     parser.add_option("-c", "--startchan", dest="startchan",
                       action="store", type="int",
-                      default=16,
+                      default=0,
                       help="starting IF channel for tests")
     parser.add_option("-n", "--numchans", dest="numchans",
                       action="store", type="int",
-                      default=4,
+                      default=16,
                       help="number of IF channels for tests")
     parser.add_option("-N", "--numiters", dest="numiters",
                       action="store", type="int",
@@ -234,7 +271,7 @@ if __name__ == '__main__':
                       help="number of iterations max in attenuator settings")
     parser.add_option("-l", "--lo", dest="lo",
                       action="store", type="float",
-                      default=120.6,
+                      default=80.4,
                       help="LO frequency in GHz")
     parser.add_option("-v", "--voltage", dest="voltage",
                       action="store", type="float",
@@ -248,6 +285,13 @@ if __name__ == '__main__':
                       action="store", type="int",
                       default=1,
                       help="Start pixel of SEQUOIA")
+    parser.add_option("-A", "--attenfile", dest="attenfile",
+                      action="store", type="string",
+                      help="Atten file (data file) from previous run")
+    parser.add_option("-D", "--freqdep", dest="freq_dep",
+                      action="store_true", 
+                      default=False,
+                      help="When doing zero offsets do a freq dependent measurement (default False)")
 
     (options, args) = parser.parse_args()  
 
@@ -260,15 +304,18 @@ if __name__ == '__main__':
     seq_pixels = numpy.arange(options.sequoia_pixel, 
                               options.sequoia_pixel + options.numchans)
     # initialize GPIB
-    syn = HP83711B()
+    syn = HP83711B('83711b')
 
     # initializing IF
     seq = Sequoia(frequencies, chans, syn)
 
-    print "Performing attenuator adjustments on the hot load. Please put in hot load"
-
-    seq.set_opt_atten(options.voltage, delta=options.delta, 
-                      num_iterations=options.numiters)
+    if options.attenfile:
+        seq.get_opt_atten_from_file(options.attenfile)
+    else:
+        print "Performing attenuator adjustments on the hot load. Please put in hot load"
+        
+        seq.set_opt_atten(options.voltage, delta=options.delta, 
+                          num_iterations=options.numiters)
 
     
     print "Getting hot voltages. Leave hot load on"
@@ -281,8 +328,10 @@ if __name__ == '__main__':
 
     print "Performing offset measurements. Please turn off 2nd IF amplifiers"
 
-    seq.get_zero_offset()
-
+    if options.freq_dep:
+        seq.get_zero_offset()
+    else:
+        seq.get_zero_offset_freq_independent()
     fp.write("#RFFreq,IFFreq,IFChan,SeqPixel,Atten,Hot,Cold,Offset\n")
     for i, f in enumerate(frequencies):
         for j, c in enumerate(chans):
@@ -290,8 +339,12 @@ if __name__ == '__main__':
                 sky =  options.lo - f
             else:
                 sky = options.lo + f
-            print sky, f, c, seq.optimal_attenuation[i, j], seq.hot_voltages[i, j], seq.cold_voltages[i, j], seq.zero_offset[i, j]
-            fp.write("%.3f,%.3f,%d,%d,%d,%.8f,%.8f,%.8f\n" % (sky, f, c, seq_pixels[j], seq.optimal_attenuation[i, j], seq.hot_voltages[i, j], seq.cold_voltages[i, j], seq.zero_offset[i, j]))
+            if options.freq_dep:
+                print sky, f, c, seq.optimal_attenuation[i, j], seq.hot_voltages[i, j], seq.cold_voltages[i, j], seq.zero_offset[i, j]
+                fp.write("%.3f,%.3f,%d,%d,%d,%.8f,%.8f,%.8f\n" % (sky, f, c, seq_pixels[j], seq.optimal_attenuation[i, j], seq.hot_voltages[i, j], seq.cold_voltages[i, j], seq.zero_offset[i, j]))
+            else:
+                print sky, f, c, seq.optimal_attenuation[i, j], seq.hot_voltages[i, j], seq.cold_voltages[i, j], seq.freq_indep_zero_offsets[j]
+                fp.write("%.3f,%.3f,%d,%d,%d,%.8f,%.8f,%.8f\n" % (sky, f, c, seq_pixels[j], seq.optimal_attenuation[i, j], seq.hot_voltages[i, j], seq.cold_voltages[i, j], seq.freq_indep_zero_offsets[j]))                
 
     fp.close()
 
