@@ -20,21 +20,29 @@ ifproc = IFProc()
 ifmod_num = 3
 chans = [8,9,10,11]
 
-filename = "IFMod%d_rev2_test.txt" %ifmod_num #module number
+pmeters = [pmeter0,pmeter1,pmeter2,pmeter3]
+Opows = [0,0,0,0]
+det_vols = [0,0,0,0]
+P_LSBs = [0,0,0,0]
+P_USBs = [0,0,0,0]
+rats = [0,0,0,0]
+
+
+filename = "IFMod%d_rev2_test.txt" %(ifmod_num) #module number
 dumpfile = os.path.join('/home/aleks/engineering/sequoia_tests/IFmodtests',
 			  filename)
 fo = open(dumpfile, "w")
 fo.write('LO_freq,IF_freq,RF_freq,Atten%d,Atten%d,Atten%d,Atten%d,P_in_raw,P_in_adj,P_out%d,Dt_V%d,P_out%d,Dt_V%d,P_out%d,Dt_V%d,P_out%d,Dt_V%d\n' 
-	%(chans(0),chans(1),chans(2),chans(3),chans(0),chans(0),chans(1),chans(1),
-		chans(2),chans(2),chans(3),chans(3))
+	%(chans[0],chans[1],chans[2],chans[3],chans[0],chans[0],chans[1],chans[1],
+		chans[2],chans[2],chans[3],chans[3]))
 
-filename2 = "IFMod%d_rev2_sidebandratio.txt" %ifmod_num #module number
+filename2 = "IFMod%d_rev2_sidebandratio.txt" %(ifmod_num) #module number
 dumpfile2 = os.path.join('/home/aleks/engineering/sequoia_tests/IFmodtests',
 			  filename2)
 fo2 = open(dumpfile2, "w")
 fo2.write('LO_freq,IF_freq,Atten%d,Atten%d,Atten%d,Atten%d,P_in_raw,P_in_adj,P_LSB%d,P_USB%d,rat%d,P_LSB%d,P_USB%d,rat%d,P_LSB%d,P_USB%d,rat%d,P_LSB%d,P_USB%d,rat%d\n'
-	%(chans(0),chans(1),chans(2),chans(3),chans(0),chans(0),chans(0), chans(1),chans(1),
-		chans(1),chans(2),chans(2),chans(2),chans(3),chans(3),chans(3))
+	%(chans[0],chans[1],chans[2],chans[3],chans[0],chans[0],chans[0], chans[1],chans[1],
+		chans[1],chans[2],chans[2],chans[2],chans[3],chans[3],chans[3]))
 
 syn_LO.set_power_level(5)
 atten = [0,0,0,0]
@@ -47,7 +55,7 @@ for LO in range (6,21,1): #GHz
 
 	for i in range(0,4,1):
 
-		channel = chans(i)
+		channel = chans[i]
 		ifproc.set_atten(atten[i],channel)
 		time.sleep(.6)
 		syn.set_power_level(3)
@@ -55,7 +63,6 @@ for LO in range (6,21,1): #GHz
 		det_V = ifproc.get_voltage(channel)
 		
 		while abs(det_V)> 2.0:
-	
 			if det_V > 2.0:
 	   			atten[i] = atten[i]+1
 			elif det_V < -2.0:
@@ -68,6 +75,7 @@ for LO in range (6,21,1): #GHz
 		time.sleep(.6)
 		det_low = ifproc.get_voltage(channel)
 		n_itr = 0
+
 		while(det_low < -9.0 and n_itr<2):
 			atten[i] = atten[i] -1
 			ifproc.set_atten(atten[chan],channel)
@@ -91,11 +99,11 @@ for LO in range (6,21,1): #GHz
 
 			for i in range(4):
 
-				Opow%d = pmeter%d.get_db_power() %(chans(i),i)
-				det_vol%d = ifproc.get_voltage(chans(i)) %chans(i)
+				Opows[i] = pmeters[i].get_db_power() 
+				det_vols[i] = ifproc.get_voltage(chans[i])
 
 			fo.write('%1.1f,%i,%1.1f,%i,%i,%i,%i,%1.1f,%1.1f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f\n' 
-			   	%(LO,IF,RF,atten[0],atten[1],atten[2],atten[3],IPow,IPow_c,Opow4,det_vol4,Opow5,det_vol5,Opow6,det_vol6,Opow7,det_vol7))
+			   	%(LO,IF,RF,atten[0],atten[1],atten[2],atten[3],IPow,IPow_c,Opows[0],det_vols[0],Opows[1],det_vols[1],Opows[2],det_vols[2],Opows[3],det_vols[3]))
 
 			if((IF==100 or IF==400 or IF==800) and LO!=20):
 				if(IF==100):
@@ -104,33 +112,33 @@ for LO in range (6,21,1): #GHz
 					syn.set_freq(RF2)
 					time.sleep(2)
 				
-					P_LSB4 = pmeter0.get_db_power()
-					P_LSB5 = pmeter1.get_db_power()
-					P_LSB6 = pmeter2.get_db_power()
-					P_LSB7 = pmeter3.get_db_power()
+					P_LSBs[0] = pmeters[0].get_db_power()
+					P_LSBs[1] = pmeters[1].get_db_power()
+					P_LSBs[2] = pmeters[2].get_db_power()
+					P_LSBs[3] = pmeters[3].get_db_power()
 				else:
 					IF2 = IF
-					P_LSB4 = Opow4
-					P_LSB5 = Opow5
-					P_LSB6 = Opow6
-					P_LSB7 = Opow7
+					P_LSBs[0] = Opows[0]
+					P_LSBs[1] = Opows[1]
+					P_LSBs[2] = Opows[2]
+					P_LSBs[3] = Opows[3]
 
 
 				syn.set_freq(syn_LO.get_freq()+IF2*1e6)
 				time.sleep(4)
-					
-				P_USB4 = pmeter0.get_db_power()
-				P_USB5 = pmeter1.get_db_power()
-				P_USB6 = pmeter2.get_db_power()
-				P_USB7 = pmeter3.get_db_power()
+		
+				P_LSBs[0] = pmeters[0].get_db_power()
+				P_LSBs[1] = pmeters[1].get_db_power()
+				P_LSBs[2] = pmeters[2].get_db_power()
+				P_LSBs[3] = pmeters[3].get_db_power()
 
-				rat4 = (P_LSB4-P_USB4)
-				rat5 = (P_LSB5-P_USB5)
-				rat6 = (P_LSB6-P_USB6)
-				rat7 = (P_LSB7-P_USB7)
+				rats[0] = (P_LSBs[0]-P_USBs[0])
+				rats[1] = (P_LSBs[1]-P_USBs[1])
+				rats[2] = (P_LSBs[2]-P_USBs[2])
+				rats[3] = (P_LSBs[3]-P_USBs[3])
 
 				fo2.write('%1.1f,%i,%i,%i,%i,%i,%1.1f,%1.1f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f,%1.3f\n' 
-			   		%(LO,IF2,atten[0],atten[1],atten[2],atten[3],IPow,IPow_c,P_LSB4,P_USB4,rat4,P_LSB5,P_USB5,rat5,P_LSB6,P_USB6,rat6,P_LSB7,P_USB7,rat7))
+			   		%(LO,IF2,atten[0],atten[1],atten[2],atten[3],IPow,IPow_c,P_LSBs[0],P_USBs[0],rats[0],P_LSBs[1],P_USBs[1],rats[1],P_LSBs[2],P_USBs[2],rats[2],P_LSBs[3],P_USBs[3],rats[3]))
 				
 				syn.set_freq(RF_freq)
 				time.sleep(1)
