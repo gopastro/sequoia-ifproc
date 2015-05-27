@@ -3,6 +3,8 @@ import itertools
 import math
 from optparse import OptionParser
 
+#needs user input at lines w/ ####
+
 marker = itertools.cycle((',', 'o', 'v', '^', '<',
                           '>', '1', '2', '3', '4',
                           's', 'p', '*', 'h', 'H',
@@ -13,7 +15,7 @@ colors = itertools.cycle(('b', 'g', 'r', 'c',
                           'firebrick', 'hotpink', 'khaki', 'maroon',
                           ))
 
-data = pd.read_csv('IFMod6_rev2_test.txt', sep=',')
+data = pd.read_csv('IFMod7_rev2_test.txt', sep=',')####
 dg = data.groupby('LO_freq')
 
 
@@ -23,7 +25,7 @@ for lofreq in dg.groups.keys():
     dfif = dg.get_group(lofreq)
     dgifs = dfif.groupby('IF_freq')
     for pixel in range(4):
-	pixelplus = pixel + 20 ####
+	pixelplus = pixel + 24 ####
         ax = fig.add_subplot(2, 2, pixel+1)
         iffreqs = dgifs.groups.keys()
         iffreqs.sort()
@@ -40,6 +42,6 @@ for lofreq in dg.groups.keys():
         ax.legend(loc='best', prop={'size':6})
     draw()
     show()
-    fig.savefig('ifmodule6_rev2_det_lo_%g_GHz.png' % lofreq)####
+    fig.savefig('ifmodule7_rev2_det_lo_%g_GHz.png' % lofreq)####
 
     
