@@ -18,13 +18,13 @@ SEQUOIA Receiever testing scripts:
 
 IF Module Chassis VME setup scripts:
 
--ifproc_corba.py
--annex_corba.py
+- ifproc_corba.py
+- annex_corba.py
 
 IF Module testing scripts:
 
--if_power_test.py
--plot_ifmodule_power.py
--plot_ifmodule_sideband.py
+- if_power_test.py
+- plot_ifmodule_power.py
+- plot_ifmodule_sideband.py
 
 
