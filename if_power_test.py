@@ -17,8 +17,8 @@ pmeter3 = PowerMeter('pmeter4')
 
 ifproc = IFProc()
 
-ifmod_num = 3
-chans = [8,9,10,11]
+ifmod_num = 8
+chans = [28,29,30,31]
 
 pmeters = [pmeter0,pmeter1,pmeter2,pmeter3]
 Opows = [0,0,0,0]
@@ -78,7 +78,7 @@ for LO in range (6,21,1): #GHz
 
 		while(det_low < -9.0 and n_itr<2):
 			atten[i] = atten[i] -1
-			ifproc.set_atten(atten[chan],channel)
+			ifproc.set_atten(atten[i],channel)
 			time.sleep(.6)
 			det_low = ifproc.get_voltage(channel)
 			n_itr+=1
@@ -127,10 +127,10 @@ for LO in range (6,21,1): #GHz
 				syn.set_freq(syn_LO.get_freq()+IF2*1e6)
 				time.sleep(4)
 		
-				P_LSBs[0] = pmeters[0].get_db_power()
-				P_LSBs[1] = pmeters[1].get_db_power()
-				P_LSBs[2] = pmeters[2].get_db_power()
-				P_LSBs[3] = pmeters[3].get_db_power()
+				P_USBs[0] = pmeters[0].get_db_power()
+				P_USBs[1] = pmeters[1].get_db_power()
+				P_USBs[2] = pmeters[2].get_db_power()
+				P_USBs[3] = pmeters[3].get_db_power()
 
 				rats[0] = (P_LSBs[0]-P_USBs[0])
 				rats[1] = (P_LSBs[1]-P_USBs[1])
