@@ -1,0 +1,161 @@
+#!/usr/bin/python
+"""A class for receiving GPIB commands from
+TCP/IP sockets"""
+
+
+import socket
+import struct
+import sys
+import traceback
+import time
+from myGpib import Gpib
+#import timing
+import syslog
+
+LOG_SYSLOG=0
+LOG_STDOUT=1
+
+msgtype = {syslog.LOG_INFO: 'LOG_INFO',
+           syslog.LOG_ERR: 'LOG_ERR'
+           }
+
+class GpibSocket:
+    '''Base class for GPIB tcpip socket communications'''
+
+    debug = 0
+    status_bytes = []
+    status_dict = {}
+
+    def __init__(self,HOST=None, PORT=None, log=LOG_SYSLOG):
+        self.log = log
+        if self.log == LOG_SYSLOG:
+            syslog.openlog('GPIBSockServer')
+        try:
+            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if HOST:
+	        #self.s.connect((HOST, PORT))
+                self.s.bind((HOST, PORT))
+            else:
+                self.s.bind((socket.gethostname(),PORT))
+            self.conn = None            
+            self.addr = None
+            self.s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            #self.syn = Gpib('83711b')
+        except:
+            self.printlog(syslog.LOG_ERR, str(self.formatExceptionInfo()))
+    
+
+    def formatExceptionInfo(self, maxTBlevel=5):
+        """copied from Linux Journal article 5821"""
+        cla, exc, trbk = sys.exc_info()
+        excName = cla.__name__
+        try:
+            excArgs = exc.__dict__["args"]
+        except KeyError:
+            excArgs = "<no args>"
+        excTb = traceback.format_tb(trbk, maxTBlevel)
+        return (excName, excArgs, excTb)
+
+    def printlog(self, *arguments):
+        if len(arguments) == 1:
+            type=syslog.LOG_INFO
+            msg = arguments[0]
+        else:
+            type=arguments[0]
+            msg=arguments[1]
+        if self.log == LOG_STDOUT:
+            print msgtype[type], msg
+        else:
+            syslog.syslog(type, msg)
+            
+    def listen(self, numconnections=10):
+        self.s.listen(numconnections)
+        
+    def accept(self):
+        self.conn, self.addr = self.s.accept()
+        self.printlog("Connected by %s" % repr(self.addr))
+        return True
+
+    def recv(self, maxlen=1024):
+        if self.conn:
+            try:
+                data = self.conn.recv(maxlen)
+                return data
+            except:
+                self.printlog(syslog.LOG_ERR, "No data")
+                self.conn=None
+                return None
+        else:
+            self.printlog(syslog.LOG_ERR,"No connection")
+
+    def process_gpib_command(self):
+        data = self.recv(1024)
+        if not data:
+            return False
+        else:
+            msg = data.split()
+            self.gpibcmd = ''
+            try:
+                self.printlog("msg[0] is %s" % msg[0])
+                self.syn = Gpib(msg[0])
+            except:
+                self.printlog(syslog.LOG_ERR, "GPIB Error")
+                return False
+            if msg[1] in ["ask", "read", "write"]:                
+                self.gpibcmd = ' '.join(msg[2:])
+                self.printlog("Received for %s %s and GPIB cmd: %s" % (msg[0], msg[1], self.gpibcmd))
+            else:
+                self.printlog(syslog.LOG_ERR, "Ignoring unknown message %s" % data)
+                return False
+            if self.syn and self.gpibcmd:
+                self.do_gpib_command(msg[1])
+                return True
+
+    def send(self, msg=None):
+        if not msg:
+            if self.conn:
+                if self.gpibreturn:
+                    self.conn.send(self.gpibreturn)
+        else:
+            if self.conn:
+                self.conn.send(msg)
+
+    def conn_close(self):
+        if self.conn:
+            self.conn.close()
+        
+    def do_gpib_command(self, msg, gpibcmd=None):
+        self.gpibreturn = ''
+        if not gpibcmd:
+            if self.gpibcmd:
+                gpibcmd = self.gpibcmd
+            else:
+                self.printlog("No GPIB command to execute")
+                return
+        if msg == "ask":
+            self.gpibreturn = self.syn.ask(gpibcmd)
+            return
+        elif msg == "write":
+            self.syn.write(gpibcmd)
+            return
+        elif msg == "read":
+            try:
+                sze = int(gpibcmd)
+            except:
+                sze = 512
+            self.gpibreturn = self.syn.read(sze)
+            return
+        
+    def receive_with_size(self, msglen):
+        msg = ''
+        while len(msg) < msglen:
+            chunk = self.s.recv(msglen-len(msg))
+            if chunk == '':
+                raise RuntimeError, "socket connection broken"
+            msg = msg + chunk
+        return msg
+
+
+    def close(self):
+        self.s.close()
+    
